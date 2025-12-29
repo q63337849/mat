@@ -7,7 +7,7 @@
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows 使用 .venv\Scripts\activate
-pip install numpy matplotlib  # 如需更平滑的样条插值，可额外安装 scipy
+pip install numpy matplotlib  # 如需更平滑且不易过冲的样条插值，可额外安装 scipy
 ```
 
 ## 直接运行示例
@@ -47,6 +47,8 @@ env = TrajectoryEnvironment(
         [50.0, 40.0, 0.0, 12.0, 20.0, 30.0],
     ]),
     waypoint_count=4,
+    # 避免三次样条产生的过冲，可保持默认的 "pchip" 插值；若想要更加平滑的曲线，可将此参数改为 "cubic"。
+    interpolation="pchip",
 )
 
 best_cost, waypoint_vec, convergence = plan_path_with_midbo(

@@ -17,12 +17,13 @@ from typing import Callable, Iterable, Tuple
 
 import numpy as np
 
-# Optional SciPy support for cubic spline interpolation.
+# Optional SciPy support for spline interpolation.
 _SCIPY_AVAILABLE = importlib.util.find_spec("scipy.interpolate") is not None
 if _SCIPY_AVAILABLE:
-    from scipy.interpolate import CubicSpline
+    from scipy.interpolate import CubicSpline, PchipInterpolator
 else:  # pragma: no cover - fallback when SciPy is unavailable
     CubicSpline = None
+    PchipInterpolator = None
 
 # Optional Matplotlib support for visualization.
 _MATPLOTLIB_AVAILABLE = importlib.util.find_spec("matplotlib") is not None
@@ -62,6 +63,9 @@ class TrajectoryEnvironment:
         Weight for climb angle changes in the smoothness term.
     sample_count : int
         Number of samples used to evaluate the spline path.
+    interpolation : str
+        Interpolator type: ``"pchip"`` (shape-preserving, default), ``"cubic"``
+        (smooth but may overshoot) or ``"linear"``.
     """
 
     start_pos: Tuple[float, float, float]
@@ -77,6 +81,7 @@ class TrajectoryEnvironment:
     turn_weight: float = 1.0
     climb_weight: float = 1.0
     sample_count: int = 120
+    interpolation: str = "pchip"
 
     @property
     def bounds(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -188,7 +193,12 @@ class TrajectoryEnvironment:
         indices = np.linspace(0.0, 1.0, num=x_seq.size)
         samples = np.linspace(0.0, 1.0, num=self.sample_count)
 
-        if CubicSpline is not None:
+        if PchipInterpolator is not None and self.interpolation == "pchip":
+            interpolator = PchipInterpolator
+            x_path = interpolator(indices, x_seq)(samples)
+            y_path = interpolator(indices, y_seq)(samples)
+            z_path = interpolator(indices, z_seq)(samples)
+        elif CubicSpline is not None and self.interpolation == "cubic":
             x_path = CubicSpline(indices, x_seq)(samples)
             y_path = CubicSpline(indices, y_seq)(samples)
             z_path = CubicSpline(indices, z_seq)(samples)
