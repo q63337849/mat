@@ -417,8 +417,44 @@ def _segment_aabb_distance(p0: np.ndarray, p1: np.ndarray, box: np.ndarray) -> f
     return d_min
 
 
+def _demo_environment() -> TrajectoryEnvironment:
+    """Create a small demo environment used when running this module directly."""
+
+    return TrajectoryEnvironment(
+        start_pos=(0.0, 0.0, 10.0),
+        goal_pos=(80.0, 80.0, 15.0),
+        map_range=(100.0, 100.0, 50.0),
+        obstacles=np.array(
+            [
+                [20.0, 20.0, 0.0, 10.0, 10.0, 20.0],
+                [50.0, 40.0, 0.0, 12.0, 20.0, 30.0],
+                [70.0, 70.0, 0.0, 8.0, 8.0, 18.0],
+            ]
+        ),
+        waypoint_count=4,
+    )
+
+
+def _main() -> None:
+    """Run a demo MIDBO trajectory plan and print summary results."""
+
+    env = _demo_environment()
+    best_cost, best_pos, convergence = plan_path_with_midbo(
+        env, population=30, iterations=200, random_state=0
+    )
+
+    print("Best cost:", best_cost)
+    print("Best waypoint vector (flattened x/y/z sections):")
+    print(best_pos)
+    print("Convergence curve length:", convergence.size)
+
+
 __all__ = [
     "TrajectoryEnvironment",
     "midbo",
     "plan_path_with_midbo",
 ]
+
+
+if __name__ == "__main__":
+    _main()
