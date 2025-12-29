@@ -24,6 +24,9 @@ if _SCIPY_AVAILABLE:
 else:  # pragma: no cover - fallback when SciPy is unavailable
     CubicSpline = None
 
+# Optional Matplotlib support for visualization.
+_MATPLOTLIB_AVAILABLE = importlib.util.find_spec("matplotlib") is not None
+
 
 @dataclass
 class TrajectoryEnvironment:
@@ -92,28 +95,7 @@ class TrajectoryEnvironment:
     def cost(self, position_vector: np.ndarray) -> float:
         """Evaluate the trajectory cost for a flattened waypoint vector."""
 
-        n = self.waypoint_count
-        x_seq = np.concatenate(([self.start_pos[0]], position_vector[:n], [self.goal_pos[0]]))
-        y_seq = np.concatenate(
-            ([self.start_pos[1]], position_vector[n : 2 * n], [self.goal_pos[1]])
-        )
-        z_seq = np.concatenate(
-            ([self.start_pos[2]], position_vector[2 * n : 3 * n], [self.goal_pos[2]])
-        )
-
-        indices = np.linspace(0.0, 1.0, num=x_seq.size)
-        samples = np.linspace(0.0, 1.0, num=self.sample_count)
-
-        if CubicSpline is not None:
-            x_path = CubicSpline(indices, x_seq)(samples)
-            y_path = CubicSpline(indices, y_seq)(samples)
-            z_path = CubicSpline(indices, z_seq)(samples)
-        else:
-            x_path = np.interp(samples, indices, x_seq)
-            y_path = np.interp(samples, indices, y_seq)
-            z_path = np.interp(samples, indices, z_seq)
-
-        path = np.stack([x_path, y_path, z_path], axis=1)
+        path = self.sample_path(position_vector)
 
         if np.any(path[:, 0] < 0) or np.any(path[:, 0] > self.map_range[0]):
             return math.inf
@@ -190,6 +172,32 @@ class TrajectoryEnvironment:
         psi_sum = float(np.abs(psi_differences).sum())
 
         return self.turn_weight * phi_sum + self.climb_weight * psi_sum
+
+    def sample_path(self, position_vector: np.ndarray) -> np.ndarray:
+        """Create a sampled 3D path from a flattened waypoint vector."""
+
+        n = self.waypoint_count
+        x_seq = np.concatenate(([self.start_pos[0]], position_vector[:n], [self.goal_pos[0]]))
+        y_seq = np.concatenate(
+            ([self.start_pos[1]], position_vector[n : 2 * n], [self.goal_pos[1]])
+        )
+        z_seq = np.concatenate(
+            ([self.start_pos[2]], position_vector[2 * n : 3 * n], [self.goal_pos[2]])
+        )
+
+        indices = np.linspace(0.0, 1.0, num=x_seq.size)
+        samples = np.linspace(0.0, 1.0, num=self.sample_count)
+
+        if CubicSpline is not None:
+            x_path = CubicSpline(indices, x_seq)(samples)
+            y_path = CubicSpline(indices, y_seq)(samples)
+            z_path = CubicSpline(indices, z_seq)(samples)
+        else:
+            x_path = np.interp(samples, indices, x_seq)
+            y_path = np.interp(samples, indices, y_seq)
+            z_path = np.interp(samples, indices, z_seq)
+
+        return np.stack([x_path, y_path, z_path], axis=1)
 
 
 def midbo(
@@ -314,21 +322,24 @@ def midbo(
 
         stagnation_window = 3
         if current_iter > stagnation_window:
-            recent = np.abs(convergence[max(0, t - stagnation_window) : t] - global_best_fit)
-            if recent.size and np.all(recent < 1e-8):
-                for i in range(population):
-                    if rng.random() < 0.7:
-                        mutation = personal_best_pos[i] + rng.standard_normal(dimension) * personal_best_pos[i]
-                    else:
-                        mutation = lower + (upper - lower) * rng.random(dimension)
-                    mutation = _bounds(mutation, lower, upper)
-                    mut_fit = objective(mutation)
-                    if mut_fit < personal_best_fit[i]:
-                        personal_best_fit[i] = mut_fit
-                        personal_best_pos[i] = mutation
-                    if mut_fit < global_best_fit:
-                        global_best_fit = mut_fit
-                        global_best_pos = mutation
+            recent_slice = convergence[max(0, t - stagnation_window) : t]
+            finite_recent = recent_slice[np.isfinite(recent_slice)]
+            if finite_recent.size:
+                recent = np.abs(finite_recent - global_best_fit)
+                if recent.size and np.all(recent < 1e-8):
+                    for i in range(population):
+                        if rng.random() < 0.7:
+                            mutation = personal_best_pos[i] + rng.standard_normal(dimension) * personal_best_pos[i]
+                        else:
+                            mutation = lower + (upper - lower) * rng.random(dimension)
+                        mutation = _bounds(mutation, lower, upper)
+                        mut_fit = objective(mutation)
+                        if mut_fit < personal_best_fit[i]:
+                            personal_best_fit[i] = mut_fit
+                            personal_best_pos[i] = mutation
+                        if mut_fit < global_best_fit:
+                            global_best_fit = mut_fit
+                            global_best_pos = mutation
 
         danger_k = 5
         danger_var_th = 1e-6
@@ -369,6 +380,74 @@ def plan_path_with_midbo(
         random_state=random_state,
     )
     return best_fit, best_pos, convergence
+
+
+def plot_trajectory(
+    env: TrajectoryEnvironment,
+    best_pos: np.ndarray,
+    convergence: np.ndarray,
+    save_path: str = "midbo_demo_path.png",
+    show: bool = False,
+) -> str:
+    """Plot a 3D trajectory and convergence curve.
+
+    Parameters
+    ----------
+    env : TrajectoryEnvironment
+        Environment used to sample the trajectory.
+    best_pos : np.ndarray
+        Flattened waypoint vector returned by :func:`plan_path_with_midbo`.
+    convergence : np.ndarray
+        Fitness values recorded over iterations.
+    save_path : str, optional
+        Location where the generated figure will be saved.
+    show : bool, optional
+        Whether to display the figure interactively when supported.
+    """
+
+    if not _MATPLOTLIB_AVAILABLE:  # pragma: no cover - soft dependency
+        raise RuntimeError("Matplotlib is required for visualization. Install `matplotlib` to enable plots.")
+
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 - needed for 3D projection
+
+    path = env.sample_path(best_pos)
+
+    fig = plt.figure(figsize=(12, 5))
+
+    ax_path = fig.add_subplot(1, 2, 1, projection="3d")
+    ax_path.plot(path[:, 0], path[:, 1], path[:, 2], label="Trajectory", color="tab:blue")
+    ax_path.scatter(env.start_pos[0], env.start_pos[1], env.start_pos[2], color="green", label="Start", s=50)
+    ax_path.scatter(env.goal_pos[0], env.goal_pos[1], env.goal_pos[2], color="red", label="Goal", s=50)
+
+    for box in env.obstacles:
+        _draw_box(ax_path, box, color="orange", alpha=0.25)
+
+    ax_path.set_xlim(0, env.map_range[0])
+    ax_path.set_ylim(0, env.map_range[1])
+    ax_path.set_zlim(0, env.map_range[2])
+    ax_path.set_xlabel("X")
+    ax_path.set_ylabel("Y")
+    ax_path.set_zlabel("Z")
+    ax_path.set_title("MIDBO Trajectory")
+    ax_path.legend(loc="best")
+
+    ax_conv = fig.add_subplot(1, 2, 2)
+    ax_conv.plot(np.arange(1, convergence.size + 1), convergence, color="tab:purple")
+    ax_conv.set_xlabel("Iteration")
+    ax_conv.set_ylabel("Fitness")
+    ax_conv.set_title("Convergence Curve")
+    ax_conv.grid(True, linestyle=":", linewidth=0.5)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150)
+    if show:
+        plt.show()
+    plt.close(fig)
+    return save_path
 
 
 def _bounds(vector: np.ndarray, lower: np.ndarray, upper: np.ndarray) -> np.ndarray:
@@ -417,6 +496,34 @@ def _segment_aabb_distance(p0: np.ndarray, p1: np.ndarray, box: np.ndarray) -> f
     return d_min
 
 
+def _draw_box(ax, box: np.ndarray, color: str, alpha: float) -> None:
+    """Render an axis-aligned bounding box on a 3D Matplotlib axis."""
+
+    x, y, z, dx, dy, dz = box
+    corners = np.array(
+        [
+            [x, y, z],
+            [x + dx, y, z],
+            [x + dx, y + dy, z],
+            [x, y + dy, z],
+            [x, y, z + dz],
+            [x + dx, y, z + dz],
+            [x + dx, y + dy, z + dz],
+            [x, y + dy, z + dz],
+        ]
+    )
+
+    edges = [
+        (0, 1), (1, 2), (2, 3), (3, 0),
+        (4, 5), (5, 6), (6, 7), (7, 4),
+        (0, 4), (1, 5), (2, 6), (3, 7),
+    ]
+
+    for start, end in edges:
+        xs, ys, zs = zip(corners[start], corners[end])
+        ax.plot(xs, ys, zs, color=color, alpha=alpha)
+
+
 def _demo_environment() -> TrajectoryEnvironment:
     """Create a small demo environment used when running this module directly."""
 
@@ -448,11 +555,18 @@ def _main() -> None:
     print(best_pos)
     print("Convergence curve length:", convergence.size)
 
+    try:
+        figure_path = plot_trajectory(env, best_pos, convergence)
+        print("Saved trajectory visualization to:", figure_path)
+    except RuntimeError as exc:  # Matplotlib missing
+        print("Skipping plot:", exc)
+
 
 __all__ = [
     "TrajectoryEnvironment",
     "midbo",
     "plan_path_with_midbo",
+    "plot_trajectory",
 ]
 
 

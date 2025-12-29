@@ -7,7 +7,7 @@
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows 使用 .venv\Scripts\activate
-pip install numpy  # 如需更平滑的样条插值，可额外安装 scipy
+pip install numpy matplotlib  # 如需更平滑的样条插值，可额外安装 scipy
 ```
 
 ## 直接运行示例
@@ -18,7 +18,16 @@ pip install numpy  # 如需更平滑的样条插值，可额外安装 scipy
 python midbo_path_planner.py
 ```
 
-运行结束后会输出最佳代价、最佳中间航点向量以及收敛曲线长度。
+运行结束后会输出最佳代价、最佳中间航点向量以及收敛曲线长度，并在当前目录保存一张示例航迹和收敛曲线的图片 `midbo_demo_path.png`（需要已安装 matplotlib）。
+
+如果已安装 matplotlib，也可以在自定义脚本里直接调用绘图辅助函数：
+
+```python
+from midbo_path_planner import plot_trajectory
+
+image_path = plot_trajectory(env, waypoint_vec, convergence, save_path="my_path.png")
+print("plot saved to", image_path)
+```
 
 ## 在自定义环境中调用
 
