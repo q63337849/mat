@@ -20,6 +20,8 @@ python midbo_path_planner.py
 
 运行结束后会输出最佳代价、最佳中间航点向量以及收敛曲线长度，并在当前目录保存一张示例航迹和收敛曲线的图片 `midbo_demo_path.png`（需要已安装 matplotlib）。
 
+为了减少运行耗时，示例与默认调用使用较小的 `population=20`、`iterations=120`，并在示例环境中将 `sample_count=60`。如需更好的收敛质量，可再逐步提高这些参数。
+
 如果已安装 matplotlib，也可以在自定义脚本里直接调用绘图辅助函数：
 
 ```python
@@ -52,7 +54,7 @@ env = TrajectoryEnvironment(
 )
 
 best_cost, waypoint_vec, convergence = plan_path_with_midbo(
-    env, population=30, iterations=200, random_state=42
+    env, population=20, iterations=120, random_state=42
 )
 
 print("best cost:", best_cost)

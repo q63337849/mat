@@ -80,7 +80,7 @@ class TrajectoryEnvironment:
     max_height: float = 100.0
     turn_weight: float = 1.0
     climb_weight: float = 1.0
-    sample_count: int = 120
+    sample_count: int = 80
     interpolation: str = "pchip"
 
     @property
@@ -373,8 +373,8 @@ def midbo(
 
 def plan_path_with_midbo(
     env: TrajectoryEnvironment,
-    population: int = 30,
-    iterations: int = 200,
+    population: int = 20,
+    iterations: int = 120,
     random_state: int | None = None,
 ) -> Tuple[float, np.ndarray, np.ndarray]:
     """Plan a trajectory using MIDBO for the provided environment."""
@@ -549,6 +549,7 @@ def _demo_environment() -> TrajectoryEnvironment:
             ]
         ),
         waypoint_count=4,
+        sample_count=60,
     )
 
 
@@ -557,7 +558,7 @@ def _main() -> None:
 
     env = _demo_environment()
     best_cost, best_pos, convergence = plan_path_with_midbo(
-        env, population=30, iterations=200, random_state=0
+        env, population=20, iterations=120, random_state=0
     )
 
     print("Best cost:", best_cost)
