@@ -1,41 +1,78 @@
 function [lb,ub,dim,fobj] = Get_Functions_details(F)
-global N mapRange boxes
+global N mapRange circles startPos goalPos staticObstacleCount
 
-mapRange = [200,200,200];   % 地图长、宽、高
+mapRange = [10,10];   % 二维栅格地图长、宽
 
 switch F
-    case 'F1'  % 随机产生长方体障碍环境
-        K = 20;                % 障碍数量（可调）
-        minSize = [8, 8, 40];  % 每个维度的最小尺寸
-        maxSize = [18,18,120]; % 每个维度的最大尺寸
-        minGap  = 6;           % 障碍-障碍/障碍-边界 间隙
-        boxes = gen_rect_obstacles(K, mapRange, minSize, maxSize, minGap);
+    case 'F1'  % 随机圆形障碍环境
+        if isempty(staticObstacleCount)
+            staticObstacleCount = 8;
+        end
+        radiusRange = [0.4, 1.2];
+        safeRadius  = 1.2;   % 起点/终点附近无障碍的安全半径
+        circles = generate_random_circles(staticObstacleCount, mapRange, startPos, goalPos, radiusRange, safeRadius);
 
-    case 'F2'  % 固定参数（13个障碍）
-        boxes = [...
-            15  20   0   10 12 60;
-            35  25   0   12 10 80;
-            55  30   0   14 10 90;
-            75  20   0   10 14 70;
-            20  55   0   12 12 85;
-            45  65   0   16 10 60;
-            70  55   0   12 16 95;
-            85  40   0   10 10 50;
-            30  80   0   14 12 70;
-            55  85   0   12 14 80;
-            80  75   0   10 12 65;
-            10  35   0   10 10 55;
-            90  60   0   10 10 60  ];
+    case 'F2'  % 固定圆形障碍（示例）
+        circles = [ ...
+            2.5, 4.0, 0.8;
+            4.0, 2.0, 0.7;
+            5.5, 5.5, 0.9;
+            7.0, 3.8, 0.8;
+            3.5, 7.2, 0.7;
+            6.8, 7.0, 1.0];
+
     otherwise
-        error('未知场景 F')
+        error('未知场景 F');
 end
 
-dim = 3*N;
+dim = 2*N;
 lb  = zeros(1,dim);
 ub  = ones(1,dim);
-ub(1:N)           = mapRange(1);   % X
-ub(N+1:2*N)       = mapRange(2);   % Y
-ub(2*N+1:3*N)     = mapRange(3);   % Z
+ub(1:N)       = mapRange(1);   % X
+ub(N+1:2*N)   = mapRange(2);   % Y
 
-fobj = @Cost_SPSO_rect;                  % 使用新的代价函数Cost_SPSO_rect/CostRect
+fobj = @Cost_SPSO_rect;
+end
+
+function circles = generate_random_circles(K, mapRange, startPos, goalPos, radiusRange, safeRadius)
+% circles: [cx cy r]
+circles = zeros(K,3);
+count = 0;
+maxTrials = max(500, 100*K);
+trial = 0;
+
+while count < K && trial < maxTrials
+    trial = trial + 1;
+    r = radiusRange(1) + (radiusRange(2)-radiusRange(1))*rand;
+    cx = r + (mapRange(1)-2*r)*rand;
+    cy = r + (mapRange(2)-2*r)*rand;
+
+    % 与起点/终点保持安全距离
+    if norm([cx,cy] - startPos) <= (r + safeRadius)
+        continue;
+    end
+    if norm([cx,cy] - goalPos) <= (r + safeRadius)
+        continue;
+    end
+
+    % 避免障碍重叠（可放宽）
+    ok = true;
+    for i = 1:count
+        if norm([cx,cy] - circles(i,1:2)) < (r + circles(i,3) + 0.15)
+            ok = false;
+            break;
+        end
+    end
+    if ~ok
+        continue;
+    end
+
+    count = count + 1;
+    circles(count,:) = [cx, cy, r];
+end
+
+if count < K
+    warning('随机障碍仅生成 %d/%d 个（地图拥挤或约束过严）', count, K);
+    circles = circles(1:count,:);
+end
 end

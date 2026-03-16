@@ -1,94 +1,67 @@
-
 close all
-clear  
+clear
 clc
 warning off;
 
-%% ÈıÎ¬Â·¾¶¹æ»®Ä£ĞÍ¶¨Òå
-global startPos goalPos N
-N=2;                                                     %  ´ıÓÅ»¯µãµÄ¸öÊı(¿ÉÒÔĞŞ¸Ä)
-startPos = [10, 10, 10];                                 %  Æğµã(¿ÉÒÔĞŞ¸Ä)
-goalPos = [175, 175, 50];                                 %  ÖÕµã(¿ÉÒÔĞŞ¸Ä)
-SearchAgents_no=30;                                      %  ÖÖÈº´óĞ¡(¿ÉÒÔĞŞ¸Ä)
-Function_name='F1';                                      %  F1:Ëæ»ú²úÉúµØÍ¼ F2£ºµ¼Èë¹Ì¶¨µØÍ¼
-Max_iteration=200;                                       %  ×î´óµü´ú´ÎÊı(¿ÉÒÔĞŞ¸Ä)
+%% äºŒç»´æ …æ ¼è·¯å¾„è§„åˆ’æ¨¡å‹ï¼ˆ10x10ï¼‰
+global startPos goalPos N staticObstacleCount
+N = 2;                           % ä¸­é—´æ§åˆ¶ç‚¹ä¸ªæ•°ï¼ˆå¯è°ƒï¼‰
+startPos = [1, 1];               % èµ·ç‚¹ï¼ˆå¯è°ƒï¼‰
+goalPos  = [9, 9];               % ç»ˆç‚¹ï¼ˆå¯è°ƒï¼‰
+staticObstacleCount = 8;         % é™æ€åœ†å½¢éšœç¢ç‰©æ•°é‡ï¼ˆå¯è‡ªå®šä¹‰ï¼‰
+
+SearchAgents_no = 30;            % ç§ç¾¤è§„æ¨¡ï¼ˆå¯è°ƒï¼‰
+Function_name   = 'F1';          % F1: éšæœºåœ†å½¢éšœç¢; F2: å›ºå®šåœ†å½¢éšœç¢
+Max_iteration   = 200;           % æœ€å¤§è¿­ä»£æ¬¡æ•°ï¼ˆå¯è°ƒï¼‰
+
 % Load details of the selected benchmark function
-[lb,ub,dim,fobj]=Get_Functions_details(Function_name);
-AlgorithmName={'MIDBO','DBO','WOA','GWO'};                           %  Ëã·¨Ãû³Æ
-addpath('./AlgorithmCode/');                             %  Ìí¼ÓËã·¨Â·¾¶
-bestFit=[];                                              %  ±£´æ¸÷Ëã·¨µÄ×îÓÅÊÊÓ¦¶ÈÖµ
-for i=1:size(AlgorithmName,2)                            %  ±éÀúÃ¿¸öËã·¨£¬ÒÀ´ÎÇó½âµ±Ç°ÎÊÌâ
-    Algorithm=str2func(AlgorithmName{i});                    %  »ñÈ¡µ±Ç°Ëã·¨Ãû³Æ£¬²¢½«×Ö·û×ª»»Îªº¯Êı
-    [Best_score,Best_pos,Convergence_curve]=Algorithm(SearchAgents_no,Max_iteration,lb,ub,dim,fobj);%µ±Ç°Ëã·¨Çó½â
-    %½«µ±Ç°Ëã·¨Çó½â½á¹û·ÅÈëdataÖĞ
-    data(i).Best_score=Best_score;                           %  ±£´æ¸ÃËã·¨µÄBest_scoreµ½data
-    data(i).Best_pos=Best_pos;                               %  ±£´æ¸ÃËã·¨µÄBest_posµ½data
-    data(i).Convergence_curve=Convergence_curve;             %  ±£´æ¸ÃËã·¨µÄConvergence_curveµ½data
-    bestFit=[bestFit data(i).Best_score];
-end  
+[lb,ub,dim,fobj] = Get_Functions_details(Function_name);
+AlgorithmName = {'MIDBO','DBO','WOA','GWO'};
+addpath('./AlgorithmCode/');
+
+bestFit = [];
+for i = 1:size(AlgorithmName,2)
+    Algorithm = str2func(AlgorithmName{i});
+    [Best_score,Best_pos,Convergence_curve] = Algorithm(SearchAgents_no,Max_iteration,lb,ub,dim,fobj);
+    data(i).Best_score = Best_score;
+    data(i).Best_pos = Best_pos;
+    data(i).Convergence_curve = Convergence_curve;
+    bestFit = [bestFit data(i).Best_score];
+end
 
 disp('bestFit:');
 disp(bestFit);
-for i=1:size(data,2)
-    disp(['Ëã·¨ ', AlgorithmName{i}, ' ×îÓÅÖµ: ', num2str(data(i).Best_score)]);
+for i = 1:size(data,2)
+    disp(['ç®—æ³• ', AlgorithmName{i}, ' æœ€ä¼˜å€¼: ', num2str(data(i).Best_score)]);
 end
 
 save data data
-%%  »­¸÷Ëã·¨µÄÖ±·½Í¼
-figure 
+
+%% æŸ±çŠ¶å›¾
+figure
 bar(bestFit)
-ylabel('ÊÊÓ¦¶È');
+ylabel('é€‚åº”å€¼');
 set(gca,'xtick',1:1:size(AlgorithmName,2));
 set(gca,'XTickLabel',AlgorithmName)
 set(gcf,'color','w')
-saveas(gcf,'./Picture/Ö±·½Í¼.jpg') %½«Í¼Æ¬±£´æµ½PictureÎÄ¼ş¼ĞÏÂÃæ
+saveas(gcf,'./Picture/ç›´æ–¹å›¾.jpg')
 
-%%  »­ÊÕÁ²ÇúÏß
-strColor={'r-','g-','b-','k-','m-','c-','y-'};
+%% æ”¶æ•›æ›²çº¿
+strColor = {'r-','g-','b-','k-','m-','c-','y-'};
 figure
-for i=1:size(data,2)
-plot(data(i).Convergence_curve,strColor{i},'linewidth',1.5)%semilogy
-hold on
+for i = 1:size(data,2)
+    plot(data(i).Convergence_curve,strColor{i},'linewidth',1.5)
+    hold on
 end
-xlabel('µü´ú´ÎÊı');
-ylabel('ÊÊÓ¦¶È');
+xlabel('è¿­ä»£æ¬¡æ•°');
+ylabel('é€‚åº”å€¼');
 legend(AlgorithmName,'Location','Best')
 set(gcf,'color','w')
-saveas(gcf,'./Picture/ÊÕÁ²ÇúÏß.jpg') %½«Í¼Æ¬±£´æµ½PictureÎÄ¼ş¼ĞÏÂÃæ
+saveas(gcf,'./Picture/æ”¶æ•›æ›²çº¿.jpg')
 
-%% ÏÔÊ¾ÈıÎ¬Í¼²¢±£´æ
-set(0,'DefaultFigureVisible','on');   % È·±£ÔÊĞíÏÔÊ¾Í¼´°
-path_pts = plotFigure_rect(data, AlgorithmName, strColor);  % Ö»·µ»ØÂ·¾¶
-hFig3 = gcf;                 % ÈıÎ¬Í¼´°¾ä±ú
-ax3   = gca;                 % ÈıÎ¬×ø±êÖá¾ä±ú
-
-% ÈıÎ¬ÊÓ½ÇÓëÃÀ»¯£¨¿ÉÑ¡£¬plotFigure_rectÀïÈôÒÑÉèÖÃ¿ÉÊ¡ÂÔ£©
-view(ax3, 3);
-axis(ax3, 'equal');
-drawnow; shg;
-
-% ±£´æÈıÎ¬Í¼
+%% ç»˜åˆ¶äºŒç»´è·¯å¾„
+set(0,'DefaultFigureVisible','on');
+path_pts = plotFigure_rect(data, AlgorithmName, strColor);
 if ~exist('./Picture','dir'); mkdir('./Picture'); end
-saveas(hFig3, './Picture/Â·¾¶ÇúÏß£¨ÈıÎ¬£©.jpg');
-
-% ¶îÍâ±£´æÂ·¾¶Êı¾İ£¨±ÜÃâÓëÄÚÖÃ path ³åÍ»£©
+saveas(gcf, './Picture/è·¯å¾„æ›²çº¿ï¼ˆäºŒç»´ï¼‰.jpg');
 save('path_data.mat','path_pts');
-
-%% Éú³É¶şÎ¬Í¼£¨¸´ÖÆ×ø±êÖáµ½ÁÙÊ±Í¼´°£¬±ÜÃâÓ°ÏìÈıÎ¬Í¼£©
-hFig2 = figure('Visible','off','Name','¶şÎ¬¿ìÕÕ','NumberTitle','off');  % Òş²Ø´°¿Ú
-ax2   = copyobj(ax3, hFig2);                 % ¸´ÖÆÈıÎ¬Öáµ½ĞÂÍ¼
-set(ax2, 'Units','normalized','Position',[0.13 0.11 0.775 0.815]); % ÌîÂú
-view(ax2, 2);                                % ¸ÄÎª¶şÎ¬ÊÓ½Ç
-axis(ax2, 'equal');
-drawnow;
-
-% ±£´æ¶şÎ¬Í¼²¢¹Ø±ÕÁÙÊ±´°¿Ú
-saveas(hFig2, './Picture/Â·¾¶ÇúÏß£¨¶şÎ¬£©.jpg');
-close(hFig2);
-
-% °ÑÈıÎ¬Í¼ÖØĞÂÖÃÇ°ÏÔÊ¾£¨ÓÃ»§¿´µ½µÄÈÔÊÇÈıÎ¬£©
-figure(hFig3); drawnow; shg;
-
-
-
-
