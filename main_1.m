@@ -4,7 +4,7 @@ clc
 warning off;
 
 %% 路径规划模型定义（支持二维/三维）
-global startPos goalPos N boxes
+global startPos goalPos N boxes mapRange
 envMode = '2D';                                          % '2D' 或 '3D'
 N = 2;                                                     % 待优化点的个数(可以修改)
 startPos = [10, 10, 10];                                   % 起点(可以修改)
@@ -26,6 +26,13 @@ end
 
 % 获取函数细节
 [lb, ub, dim, fobj] = Get_Functions_details(Function_name);
+
+% 障碍物检查（便于排查“看起来没有障碍物”的问题）
+if isempty(boxes)
+    warning('Get_Functions_details 返回的 boxes 为空：当前场景无障碍物。');
+else
+    fprintf('当前场景障碍物数量: %d\n', size(boxes,1));
+end
 
 % 强制确保边界适合航迹规划（非负坐标）
 fprintf('原始问题边界: lb=[%s], ub=[%s]\n', num2str(lb), num2str(ub));
