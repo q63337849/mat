@@ -5,7 +5,7 @@ num = numel(data);
 
 for i=1:num
     x = data(i).Best_pos;
-    if isempty(x)
+    if isempty(x) || any(~isfinite(x)) || numel(x) < 2*N
         path(i).data = nan(100,2); %#ok<AGROW>
         continue;
     end
@@ -23,7 +23,6 @@ axis([0 mapRange(1) 0 mapRange(2)])
 axis equal
 xlabel('x'); ylabel('y');
 
-% 画障碍（二维矩形）
 if isempty(boxes)
     warning('当前场景未生成任何障碍物（boxes为空）。');
 else
@@ -33,21 +32,26 @@ else
     end
 end
 
-% 起点终点
 scatter(startPos(1), startPos(2), 70, 'g', 'filled');
-text(startPos(1), startPos(2)+3, '起点');
+text(startPos(1), startPos(2)+0.6, '起点');
 scatter(goalPos(1), goalPos(2), 70, 'b', 'filled');
-text(goalPos(1), goalPos(2)+3, '终点');
+text(goalPos(1), goalPos(2)+0.6, '终点');
 
-% 路径
 leg = gobjects(1,num);
+nameList = {};
+k = 0;
 for i=1:num
     if all(isnan(path(i).data(:)))
         continue;
     end
-    leg(i) = plot(path(i).data(:,1), path(i).data(:,2), strcolor{i}, 'LineWidth', 2.0);
+    k = k + 1;
+    leg(k) = plot(path(i).data(:,1), path(i).data(:,2), strcolor{i}, 'LineWidth', 2.0);
+    nameList{k} = LegendStr{i}; %#ok<AGROW>
 end
-legend(leg, LegendStr, 'location','best')
+
+if k > 0
+    legend(leg(1:k), nameList, 'location','best');
+end
 title(sprintf('二维路径与障碍物（障碍数量: %d）', size(boxes,1)));
 set(gcf,'color','w')
 end

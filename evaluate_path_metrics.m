@@ -2,7 +2,7 @@ function metrics = evaluate_path_metrics(bestPos, N, startPos, goalPos, boxes)
 % 二维路径质量指标：总长度、最小安全距离、拐点数、平均转弯角
 
 if isempty(bestPos) || any(~isfinite(bestPos))
-    metrics = struct('L', inf, 'd_min', -inf, 'turning_count', NaN, ...
+    metrics = struct('L', NaN, 'd_min', NaN, 'turning_count', NaN, ...
         'avg_turn_angle_deg', NaN, 'path', []);
     return;
 end
