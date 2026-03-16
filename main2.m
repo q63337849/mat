@@ -11,9 +11,10 @@ goalPos  = [9, 9];               % 终点（可调）
 staticObstacleCount = 8;         % 静态圆形障碍物数量（可自定义）
 
 SearchAgents_no = 30;            % 种群规模（可调）
-Function_name   = 'F1';          % F1: 随机圆形障碍; F2: 固定圆形障碍
+Function_name   = 'F2';          % F1: 随机圆形障碍; F2: 固定圆形障碍（默认F2避免直线路径过于平凡）
 Max_iteration   = 200;           % 最大迭代次数（可调）
 RunTimes        = 30;            % 独立运行次数
+rng(2024);                       % 固定随机种子，保证可复现
 
 % 加载场景与目标函数
 [lb,ub,dim,fobj] = Get_Functions_details(Function_name);
@@ -21,6 +22,7 @@ AlgorithmName = {'MIDBO','DBO','WOA','GWO'};
 addpath('./AlgorithmCode/');
 
 result = struct([]);
+L_straight = norm(goalPos - startPos);
 
 for i = 1:numel(AlgorithmName)
     Algorithm = str2func(AlgorithmName{i});
@@ -54,6 +56,15 @@ for i = 1:numel(AlgorithmName)
 
         pathXY = build_path(bestPos, N, startPos, goalPos, 120);
         [L, d_min, turnCount, avgTurnDeg] = path_quality_metrics(pathXY, circles);
+
+        L_runs = zeros(validCount,1);
+        dmin_runs = zeros(validCount,1);
+        turn_runs = zeros(validCount,1);
+        avgturn_runs = zeros(validCount,1);
+        for vr = 1:validCount
+            path_vr = build_path(pos_valid(vr,:), N, startPos, goalPos, 120);
+            [L_runs(vr), dmin_runs(vr), turn_runs(vr), avgturn_runs(vr)] = path_quality_metrics(path_vr, circles);
+        end
     else
         J_best = NaN;
         J_mean = NaN;
@@ -66,6 +77,10 @@ for i = 1:numel(AlgorithmName)
         d_min = NaN;
         turnCount = NaN;
         avgTurnDeg = NaN;
+        L_runs = NaN;
+        dmin_runs = NaN;
+        turn_runs = NaN;
+        avgturn_runs = NaN;
     end
 
     result(i).Algorithm = AlgorithmName{i};
@@ -73,6 +88,13 @@ for i = 1:numel(AlgorithmName)
     result(i).d_min = d_min;
     result(i).turn_count = turnCount;
     result(i).avg_turn_deg = avgTurnDeg;
+    result(i).L_mean = mean(L_runs);
+    result(i).L_std = std(L_runs);
+    result(i).d_min_mean = mean(dmin_runs);
+    result(i).d_min_std = std(dmin_runs);
+    result(i).turn_count_mean = mean(turn_runs);
+    result(i).avg_turn_deg_mean = mean(avgturn_runs);
+    result(i).detour_ratio = safe_ratio(L, L_straight);
 
     result(i).J_best = J_best;
     result(i).J_mean = J_mean;
@@ -90,6 +112,8 @@ for i = 1:numel(AlgorithmName)
     result(i).bestPath = pathXY;
     result(i).J_all = J_values;
     result(i).t_all = t_values;
+    result(i).L_all_valid = L_runs;
+    result(i).d_min_all_valid = dmin_runs;
 end
 
 %% 输出指标
@@ -101,6 +125,9 @@ for i = 1:numel(result)
     fprintf('  最小安全距离 d_min      = %.4f\n', result(i).d_min);
     fprintf('  拐点数量                = %g\n', result(i).turn_count);
     fprintf('  平均转弯角(度)          = %.4f\n', result(i).avg_turn_deg);
+    fprintf('  路径长度 L(mean±std)    = %.4f ± %.4f\n', result(i).L_mean, result(i).L_std);
+    fprintf('  最小安全距 d_min(mean)  = %.4f\n', result(i).d_min_mean);
+    fprintf('  相对直线绕行率 L/L0     = %.4f  (L0=%.4f)\n', result(i).detour_ratio, L_straight);
 
     fprintf('优化性能指标:\n');
     fprintf('  综合代价终值 J(best)    = %.6f\n', result(i).J_best);
@@ -130,6 +157,10 @@ for r = 1:numel(idxt)
     fprintf('%d)%s ', r, result(idxt(r)).Algorithm);
 end
 fprintf('\n');
+
+if all([result.detour_ratio] < 1.05)
+    fprintf('提示: 所有算法的 L/L0 < 1.05，场景可能过于简单（接近直线路径）。可切换更复杂障碍配置。\n');
+end
 
 save('main2_metrics.mat', 'result');
 
