@@ -3,8 +3,9 @@ clear
 clc
 warning off;
 
-%% 三维路径规划模型定义
+%% 路径规划模型定义（支持二维/三维）
 global startPos goalPos N boxes
+envMode = '2D';                                          % '2D' 或 '3D'
 N = 2;                                                     % 待优化点的个数(可以修改)
 startPos = [10, 10, 10];                                   % 起点(可以修改)
 goalPos = [175, 175, 50];                                  % 终点(可以修改)
@@ -12,6 +13,16 @@ SearchAgents_no = 30;                                      % 种群大小(可以
 Function_name = 'F1';                                      % F1:随机地图 F2:固定地图
 Max_iteration = 200;                                       % 最大迭代次数(可以修改)
 numRuns = 30;                                              % 独立运行次数
+
+% 根据模式设置起终点高度（2D模式下固定高度飞行）
+if strcmpi(envMode, '2D')
+    zFixed = 20;                                            % 2D模式固定高度，需高于Cost_SPSO_rect中的hmin
+    startPos(3) = zFixed;
+    goalPos(3) = zFixed;
+    fprintf('当前模式: 2D（固定高度 z=%.2f）\n', zFixed);
+else
+    fprintf('当前模式: 3D\n');
+end
 
 % 获取函数细节
 [lb, ub, dim, fobj] = Get_Functions_details(Function_name);
@@ -23,6 +34,12 @@ if any(ub <= lb)
     ub = max(ub, max(goalPos) + 50);
 end
 fprintf('修正后边界: lb=[%s], ub=[%s]\n', num2str(lb), num2str(ub));
+
+% 2D模式：将所有中间航点的z维搜索空间固定为zFixed，等效为平面路径规划
+if strcmpi(envMode, '2D')
+    lb(2*N+1:3*N) = startPos(3);
+    ub(2*N+1:3*N) = startPos(3);
+end
 
 % 算法列表
 AlgorithmName = {'MIDBO', 'DBO', 'WOA', 'GWO'};
