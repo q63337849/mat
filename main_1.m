@@ -1,189 +1,173 @@
 close all
-clear  
+clear
 clc
 warning off;
 
-%% 三维路径规划模型定义
-global startPos goalPos N
-N = 2;                                                     %  待优化点的个数(可以修改)
-startPos = [10, 10, 10];                                   %  起点(可以修改)
-goalPos = [175, 175, 50];                                  %  终点(可以修改)
-SearchAgents_no = 30;                                      %  种群大小(可以修改)
-Function_name = 'F1';                                      %  F1:随机产生地图 F2：导入固定地图
-Max_iteration = 200;                                       %  最大迭代次数(可以修改)
+%% 二维路径规划模型定义（已移除三维环境）
+global startPos goalPos N boxes mapRange
+N = 2;                                                   % 待优化中间点个数
+startPos = [1, 1];                                       % 二维起点 [x,y]
+goalPos  = [18, 18];                                     % 二维终点 [x,y]
+SearchAgents_no = 30;                                    % 种群大小
+Function_name = 'F1';                                    % F1随机障碍 F2固定障碍
+Max_iteration = 200;                                     % 最大迭代次数
+numRuns = 30;                                            % 独立运行次数
 
-% 获取函数细节
+% 获取函数细节（二维）
 [lb, ub, dim, fobj] = Get_Functions_details(Function_name);
 
-% 强制确保边界适合航迹规划（非负坐标）
-fprintf('原始问题边界: lb=[%s], ub=[%s]\n', num2str(lb), num2str(ub));
-
-% 对于航迹规划，确保所有坐标都是非负的
-lb = max(lb, 0);  % 下边界不能小于0
-if any(ub <= lb)
-    ub = max(ub, max(goalPos) + 50);  % 确保上边界合理
+if isempty(boxes)
+    warning('Get_Functions_details 返回的 boxes 为空：当前场景无障碍物。');
+else
+    fprintf('当前场景障碍物数量: %d\n', size(boxes,1));
 end
 
-fprintf('修正后边界: lb=[%s], ub=[%s]\n', num2str(lb), num2str(ub));
-fprintf('起点: [%s], 终点: [%s]\n', num2str(startPos), num2str(goalPos));
+fprintf('二维问题边界: lb=[%s], ub=[%s]\n', num2str(lb), num2str(ub));
 
-% 验证起点和终点是否在边界内
-for i = 1:length(startPos)
-    curr_lb = lb(min(i, length(lb)));
-    curr_ub = ub(min(i, length(ub)));
-    
-    if startPos(i) < curr_lb || startPos(i) > curr_ub
-        fprintf('警告: 起点维度%d超出边界[%.2f, %.2f], 值=%.2f\n', i, curr_lb, curr_ub, startPos(i));
-    end
-    
-    if goalPos(i) < curr_lb || goalPos(i) > curr_ub
-        fprintf('警告: 终点维度%d超出边界[%.2f, %.2f], 值=%.2f\n', i, curr_lb, curr_ub, goalPos(i));
-    end
-end
-
-% 算法列表（使用改进的WOA）
 AlgorithmName = {'MIDBO', 'DBO', 'WOA', 'GWO'};
 addpath('./AlgorithmCode/');
 
-bestFit = [];
+bestFit = nan(1, numel(AlgorithmName));
 data = struct();
+metricsSummary = struct();
 
-for i = 1:size(AlgorithmName, 2)
-    fprintf('\n=== 开始运行算法: %s ===\n', AlgorithmName{i});
-    
+for i = 1:numel(AlgorithmName)
+    fprintf('\n=== 开始运行算法: %s (%d次独立运行) ===\n', AlgorithmName{i}, numRuns);
     Algorithm = str2func(AlgorithmName{i});
-    
-    try
-        [Best_score, Best_pos, Convergence_curve] = Algorithm(SearchAgents_no, Max_iteration, lb, ub, dim, fobj);
-        
-        % 验证结果是否包含负值
-        if any(Best_pos < 0)
-            fprintf('错误: 算法%s返回了负坐标: [%s]\n', AlgorithmName{i}, num2str(Best_pos));
-            % 修正负值
-            Best_pos = max(Best_pos, 0);
-            fprintf('已修正为: [%s]\n', num2str(Best_pos));
+
+    J_runs = nan(1, numRuns);
+    t_runs = nan(1, numRuns);
+    bestScore = inf;
+    bestPos = [];
+    bestCurve = [];
+
+    for runIdx = 1:numRuns
+        try
+            tStart = tic;
+            [Best_score, Best_pos, Convergence_curve] = Algorithm(SearchAgents_no, Max_iteration, lb, ub, dim, fobj);
+            tCost = toc(tStart);
+
+            J_runs(runIdx) = Best_score;
+            t_runs(runIdx) = tCost;
+
+            if isfinite(Best_score) && Best_score < bestScore
+                bestScore = Best_score;
+                bestPos = Best_pos;
+                bestCurve = Convergence_curve;
+            end
+
+            fprintf('[%s][Run %02d/%02d] J=%.6f, t_global=%.4fs\n', ...
+                AlgorithmName{i}, runIdx, numRuns, Best_score, tCost);
+        catch ME
+            fprintf('[%s][Run %02d/%02d] 运行失败: %s\n', AlgorithmName{i}, runIdx, numRuns, ME.message);
         end
-        
-        % 保存结果
-        data(i).Best_score = Best_score;
-        data(i).Best_pos = Best_pos;
-        data(i).Convergence_curve = Convergence_curve;
-        bestFit = [bestFit data(i).Best_score];
-        
-        fprintf('算法%s完成 - 最优值: %.6f, 最优位置: [%s]\n', ...
-                AlgorithmName{i}, Best_score, num2str(Best_pos, '%.2f '));
-                
-    catch ME
-        fprintf('算法%s运行出错: %s\n', AlgorithmName{i}, ME.message);
-        % 提供默认值
-        data(i).Best_score = inf;
-        data(i).Best_pos = zeros(1, dim);
-        data(i).Convergence_curve = inf * ones(1, Max_iteration);
-        bestFit = [bestFit inf];
     end
-end
 
-% 显示结果
-fprintf('\n=== 最终结果对比 ===\n');
-fprintf('bestFit: [%s]\n', num2str(bestFit, '%.6f '));
+    validJ = J_runs(isfinite(J_runs));
+    validT = t_runs(isfinite(t_runs));
 
-for i = 1:size(data, 2)
-    if isfinite(data(i).Best_score)
-        fprintf('算法 %s - 最优值: %.6f, 位置: [%s]\n', ...
-                AlgorithmName{i}, data(i).Best_score, num2str(data(i).Best_pos, '%.2f '));
+    if isempty(validJ)
+        J_best = inf; J_mean = inf; J_std = inf;
     else
-        fprintf('算法 %s - 运行失败\n', AlgorithmName{i});
+        J_best = min(validJ);
+        J_mean = mean(validJ);
+        J_std = std(validJ);
     end
+
+    if isempty(validT)
+        t_global = inf;
+    else
+        t_global = validT(1);
+    end
+
+    pathMetrics = evaluate_path_metrics(bestPos, N, startPos, goalPos, boxes);
+
+    data(i).Best_score = bestScore;
+    data(i).Best_pos = bestPos;
+    data(i).Convergence_curve = bestCurve;
+    data(i).J_runs = J_runs;
+    data(i).t_runs = t_runs;
+
+    metricsSummary(i).Algorithm = AlgorithmName{i};
+    metricsSummary(i).L = pathMetrics.L;
+    metricsSummary(i).d_min = pathMetrics.d_min;
+    metricsSummary(i).turning_count = pathMetrics.turning_count;
+    metricsSummary(i).avg_turn_angle_deg = pathMetrics.avg_turn_angle_deg;
+    metricsSummary(i).J_best_30 = J_best;
+    metricsSummary(i).J_mean_30 = J_mean;
+    metricsSummary(i).J_std_30 = J_std;
+    metricsSummary(i).t_global = t_global;
+
+    bestFit(i) = bestScore;
+
+    fprintf('--- %s 指标汇总 ---\n', AlgorithmName{i});
+    fprintf('路径总长度 L = %.4f\n', pathMetrics.L);
+    fprintf('最小安全距离 d_min = %.4f\n', pathMetrics.d_min);
+    fprintf('拐点数量 = %d, 平均转弯角 = %.4f°\n', pathMetrics.turning_count, pathMetrics.avg_turn_angle_deg);
+    fprintf('综合代价 J(30次): 最优=%.6f, 平均=%.6f, 标准差=%.6f\n', J_best, J_mean, J_std);
+    fprintf('规划耗时 t_global(单次) = %.4fs\n', t_global);
 end
 
-% 保存数据
-save data data
+fprintf('\n=== 最终指标对比表 ===\n');
+for i = 1:numel(metricsSummary)
+    fprintf(['%s | L=%.4f | d_min=%.4f | 拐点=%d | 平均转角=%.4f° | ', ...
+             'J(best/mean/std)=%.6f/%.6f/%.6f | t_global=%.4fs\n'], ...
+             metricsSummary(i).Algorithm, metricsSummary(i).L, metricsSummary(i).d_min, ...
+             metricsSummary(i).turning_count, metricsSummary(i).avg_turn_angle_deg, ...
+             metricsSummary(i).J_best_30, metricsSummary(i).J_mean_30, metricsSummary(i).J_std_30, ...
+             metricsSummary(i).t_global);
+end
 
-%% 绘制结果图
-% 创建Picture文件夹
-if ~exist('./Picture','dir')
+save('data.mat', 'data', 'metricsSummary');
+
+if ~exist('./Picture', 'dir')
     mkdir('./Picture');
 end
 
 % 直方图
-figure 
-valid_fit = bestFit(isfinite(bestFit));
-valid_names = AlgorithmName(isfinite(bestFit));
-
-if ~isempty(valid_fit)
-    bar(valid_fit)
-    ylabel('适应度');
-    set(gca,'xtick', 1:length(valid_names));
-    set(gca,'XTickLabel', valid_names);
-    title('各算法性能对比');
+figure
+validMask = isfinite(bestFit);
+validFit = bestFit(validMask);
+validNames = AlgorithmName(validMask);
+if ~isempty(validFit)
+    bar(validFit)
+    ylabel('适应度(最优J)');
+    set(gca, 'xtick', 1:length(validNames));
+    set(gca, 'XTickLabel', validNames);
+    title('各算法最优J对比（二维）');
     grid on;
-else
-    text(0.5, 0.5, '所有算法都失败了', 'HorizontalAlignment', 'center');
 end
-set(gcf,'color','w');
-saveas(gcf,'./Picture/直方图.jpg');
+set(gcf, 'color', 'w');
+saveas(gcf, './Picture/直方图.jpg');
 
 % 收敛曲线
-strColor = {'r-','g-','b-','k-','m-','c-','y-'};
+strColor = {'r-', 'g-', 'b-', 'k-', 'm-', 'c-', 'y-'};
 figure
-legend_entries = {};
-plot_count = 0;
-
-for i = 1:size(data, 2)
-    if isfinite(data(i).Best_score) && all(isfinite(data(i).Convergence_curve))
-        plot_count = plot_count + 1;
-        plot(data(i).Convergence_curve, strColor{mod(i-1,length(strColor))+1}, 'linewidth', 1.5);
+legendEntries = {};
+plotCount = 0;
+for i = 1:numel(data)
+    if isfield(data(i), 'Convergence_curve') && ~isempty(data(i).Convergence_curve) && all(isfinite(data(i).Convergence_curve))
+        plotCount = plotCount + 1;
+        plot(data(i).Convergence_curve, strColor{mod(i-1, length(strColor)) + 1}, 'LineWidth', 1.5);
         hold on;
-        legend_entries{plot_count} = AlgorithmName{i};
+        legendEntries{plotCount} = AlgorithmName{i}; %#ok<SAGROW>
     end
 end
-
-if plot_count > 0
-    xlabel('迭代次数');
-    ylabel('无人机飞行路径长度');
-    legend(legend_entries, 'Location', 'Best');
-    title('算法收敛曲线对比');
-    grid on;
-else
-    text(0.5, 0.5, '没有有效的收敛数据', 'HorizontalAlignment', 'center');
+if plotCount > 0
+    xlabel('迭代次数'); ylabel('代价值 J');
+    legend(legendEntries, 'Location', 'Best');
+    title('算法收敛曲线对比（二维）'); grid on;
 end
-set(gcf,'color','w');
-saveas(gcf,'./Picture/收敛曲线.jpg');
+set(gcf, 'color', 'w');
+saveas(gcf, './Picture/收敛曲线.jpg');
 
-%% 显示三维图
+% 二维路径图
 try
-    set(0,'DefaultFigureVisible','on');
     path_pts = plotFigure_rect(data, AlgorithmName, strColor);
-    hFig3 = gcf;
-    ax3 = gca;
-    
-    view(ax3, 3);
-    axis(ax3, 'equal');
-    drawnow; 
-    shg;
-    
-    saveas(hFig3, './Picture/路径曲线（三维）.jpg');
-    
-    % 生成二维图
-    hFig2 = figure('Visible','off','Name','二维快照','NumberTitle','off');
-    ax2 = copyobj(ax3, hFig2);
-    set(ax2, 'Units','normalized','Position',[0.13 0.11 0.775 0.815]);
-    view(ax2, 2);
-    axis(ax2, 'equal');
-    drawnow;
-    
-    saveas(hFig2, './Picture/路径曲线（二维）.jpg');
-    close(hFig2);
-    
-    figure(hFig3); 
-    drawnow; 
-    shg;
-    
-    % 保存路径数据
-    save('path_data.mat','path_pts');
-    
+    saveas(gcf, './Picture/路径曲线（二维）.jpg');
+    save('path_data.mat', 'path_pts');
 catch ME
     fprintf('绘制路径图时出错: %s\n', ME.message);
 end
 
-fprintf('\n程序执行完成！\n');
+fprintf('\n程序执行完成！（纯二维环境）\n');
