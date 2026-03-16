@@ -38,11 +38,35 @@ for i = 1:numel(AlgorithmName)
         bestPosRuns(k,:) = Best_pos;
     end
 
-    [J_best, idxBest] = min(J_values);
-    bestPos = bestPosRuns(idxBest,:);
-    pathXY = build_path(bestPos, N, startPos, goalPos, 120);
+    validMask = isfinite(J_values);
+    validCount = sum(validMask);
+    invalidCount = RunTimes - validCount;
 
-    [L, d_min, turnCount, avgTurnDeg] = path_quality_metrics(pathXY, circles);
+    if validCount > 0
+        J_valid = J_values(validMask);
+        pos_valid = bestPosRuns(validMask,:);
+
+        [J_best, idxBest] = min(J_valid);
+        bestPos = pos_valid(idxBest,:);
+        J_mean = mean(J_valid);
+        J_std = std(J_valid);
+        successRate = 100 * validCount / RunTimes;
+
+        pathXY = build_path(bestPos, N, startPos, goalPos, 120);
+        [L, d_min, turnCount, avgTurnDeg] = path_quality_metrics(pathXY, circles);
+    else
+        J_best = NaN;
+        J_mean = NaN;
+        J_std = NaN;
+        successRate = 0;
+        bestPos = NaN(1, dim);
+        pathXY = NaN(120, 2);
+
+        L = NaN;
+        d_min = NaN;
+        turnCount = NaN;
+        avgTurnDeg = NaN;
+    end
 
     result(i).Algorithm = AlgorithmName{i};
     result(i).L = L;
@@ -51,14 +75,19 @@ for i = 1:numel(AlgorithmName)
     result(i).avg_turn_deg = avgTurnDeg;
 
     result(i).J_best = J_best;
-    result(i).J_mean = mean(J_values);
-    result(i).J_std = std(J_values);
+    result(i).J_mean = J_mean;
+    result(i).J_std = J_std;
+    result(i).valid_runs = validCount;
+    result(i).invalid_runs = invalidCount;
+    result(i).success_rate = successRate;
 
     result(i).t_global_mean = mean(t_values);
     result(i).t_global_std = std(t_values);
 
     result(i).bestPos = bestPos;
     result(i).bestPath = pathXY;
+    result(i).J_all = J_values;
+    result(i).t_all = t_values;
 end
 
 %% 输出指标
@@ -68,13 +97,16 @@ for i = 1:numel(result)
     fprintf('路径质量指标:\n');
     fprintf('  路径总长度 L            = %.4f\n', result(i).L);
     fprintf('  最小安全距离 d_min      = %.4f\n', result(i).d_min);
-    fprintf('  拐点数量                = %d\n', result(i).turn_count);
+    fprintf('  拐点数量                = %g\n', result(i).turn_count);
     fprintf('  平均转弯角(度)          = %.4f\n', result(i).avg_turn_deg);
 
     fprintf('优化性能指标:\n');
     fprintf('  综合代价终值 J(best)    = %.6f\n', result(i).J_best);
     fprintf('  综合代价终值 J(mean)    = %.6f\n', result(i).J_mean);
     fprintf('  综合代价终值 J(std)     = %.6f\n', result(i).J_std);
+    fprintf('  有效运行次数            = %d/%d\n', result(i).valid_runs, RunTimes);
+    fprintf('  失效运行次数            = %d\n', result(i).invalid_runs);
+    fprintf('  规划成功率              = %.2f%%\n', result(i).success_rate);
     fprintf('  规划耗时 t_global(mean) = %.6f s\n', result(i).t_global_mean);
     fprintf('  规划耗时 t_global(std)  = %.6f s\n', result(i).t_global_std);
 end
@@ -125,12 +157,18 @@ for i = 2:size(pathXY,1)-1
     anglesDeg(end+1,1) = theta; %#ok<AGROW>
 end
 
+turnThresholdDeg = 5; % 小于该角度视为近似直行
+
 if isempty(anglesDeg)
     turnCount = 0;
     avgTurnDeg = 0;
 else
-    turnThresholdDeg = 5; % 小于该角度视为近似直行
-    turnCount = sum(anglesDeg > turnThresholdDeg);
-    avgTurnDeg = mean(anglesDeg);
+    turnAngles = anglesDeg(anglesDeg > turnThresholdDeg);
+    turnCount = numel(turnAngles);
+    if turnCount == 0
+        avgTurnDeg = 0;
+    else
+        avgTurnDeg = mean(turnAngles);
+    end
 end
 end
