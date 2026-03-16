@@ -1,0 +1,136 @@
+close all
+clear
+clc
+warning off;
+
+%% 二维栅格路径规划模型（10x10）
+global startPos goalPos N staticObstacleCount circles
+N = 2;                           % 中间控制点个数（可调）
+startPos = [1, 1];               % 起点（可调）
+goalPos  = [9, 9];               % 终点（可调）
+staticObstacleCount = 8;         % 静态圆形障碍物数量（可自定义）
+
+SearchAgents_no = 30;            % 种群规模（可调）
+Function_name   = 'F1';          % F1: 随机圆形障碍; F2: 固定圆形障碍
+Max_iteration   = 200;           % 最大迭代次数（可调）
+RunTimes        = 30;            % 独立运行次数
+
+% 加载场景与目标函数
+[lb,ub,dim,fobj] = Get_Functions_details(Function_name);
+AlgorithmName = {'MIDBO','DBO','WOA','GWO'};
+addpath('./AlgorithmCode/');
+
+result = struct([]);
+
+for i = 1:numel(AlgorithmName)
+    Algorithm = str2func(AlgorithmName{i});
+
+    J_values = zeros(RunTimes,1);
+    t_values = zeros(RunTimes,1);
+    bestPosRuns = zeros(RunTimes, dim);
+
+    for k = 1:RunTimes
+        tic;
+        [Best_score,Best_pos,~] = Algorithm(SearchAgents_no,Max_iteration,lb,ub,dim,fobj);
+        t_values(k) = toc;
+
+        J_values(k) = Best_score;
+        bestPosRuns(k,:) = Best_pos;
+    end
+
+    [J_best, idxBest] = min(J_values);
+    bestPos = bestPosRuns(idxBest,:);
+    pathXY = build_path(bestPos, N, startPos, goalPos, 120);
+
+    [L, d_min, turnCount, avgTurnDeg] = path_quality_metrics(pathXY, circles);
+
+    result(i).Algorithm = AlgorithmName{i};
+    result(i).L = L;
+    result(i).d_min = d_min;
+    result(i).turn_count = turnCount;
+    result(i).avg_turn_deg = avgTurnDeg;
+
+    result(i).J_best = J_best;
+    result(i).J_mean = mean(J_values);
+    result(i).J_std = std(J_values);
+
+    result(i).t_global_mean = mean(t_values);
+    result(i).t_global_std = std(t_values);
+
+    result(i).bestPos = bestPos;
+    result(i).bestPath = pathXY;
+end
+
+%% 输出指标
+fprintf('\n================ 指标统计（%d 次独立运行） ================\n', RunTimes);
+for i = 1:numel(result)
+    fprintf('\n[%s]\n', result(i).Algorithm);
+    fprintf('路径质量指标:\n');
+    fprintf('  路径总长度 L            = %.4f\n', result(i).L);
+    fprintf('  最小安全距离 d_min      = %.4f\n', result(i).d_min);
+    fprintf('  拐点数量                = %d\n', result(i).turn_count);
+    fprintf('  平均转弯角(度)          = %.4f\n', result(i).avg_turn_deg);
+
+    fprintf('优化性能指标:\n');
+    fprintf('  综合代价终值 J(best)    = %.6f\n', result(i).J_best);
+    fprintf('  综合代价终值 J(mean)    = %.6f\n', result(i).J_mean);
+    fprintf('  综合代价终值 J(std)     = %.6f\n', result(i).J_std);
+    fprintf('  规划耗时 t_global(mean) = %.6f s\n', result(i).t_global_mean);
+    fprintf('  规划耗时 t_global(std)  = %.6f s\n', result(i).t_global_std);
+end
+fprintf('\n============================================================\n');
+
+save('main2_metrics.mat', 'result');
+
+
+function pathXY = build_path(bestPos, N, startPos, goalPos, nInterp)
+x_seq = [startPos(1), bestPos(1:N), goalPos(1)];
+y_seq = [startPos(2), bestPos(N+1:2*N), goalPos(2)];
+k = length(x_seq);
+I_seq = linspace(0,1,nInterp);
+X_seq = spline(linspace(0,1,k), x_seq, I_seq);
+Y_seq = spline(linspace(0,1,k), y_seq, I_seq);
+pathXY = [X_seq(:), Y_seq(:)];
+end
+
+function [L, d_min, turnCount, avgTurnDeg] = path_quality_metrics(pathXY, circles)
+% 路径总长度
+seg = diff(pathXY, 1, 1);
+L = sum(sqrt(sum(seg.^2, 2)));
+
+% 最小安全距离（路径点到最近障碍物边界距离）
+if isempty(circles)
+    d_min = inf;
+else
+    d_min = inf;
+    for p = 1:size(pathXY,1)
+        dToCircles = sqrt(sum((circles(:,1:2) - pathXY(p,:)).^2, 2)) - circles(:,3);
+        d_min = min(d_min, min(dToCircles));
+    end
+end
+
+% 转角统计
+anglesDeg = [];
+for i = 2:size(pathXY,1)-1
+    v1 = pathXY(i,:) - pathXY(i-1,:);
+    v2 = pathXY(i+1,:) - pathXY(i,:);
+    n1 = norm(v1);
+    n2 = norm(v2);
+    if n1 < 1e-10 || n2 < 1e-10
+        continue;
+    end
+    cosTheta = dot(v1,v2) / (n1*n2);
+    cosTheta = max(-1, min(1, cosTheta));
+    theta = acosd(cosTheta);
+    anglesDeg(end+1,1) = theta; %#ok<AGROW>
+end
+
+if isempty(anglesDeg)
+    turnCount = 0;
+    avgTurnDeg = 0;
+else
+    turnThresholdDeg = 5; % 小于该角度视为近似直行
+    turnCount = sum(anglesDeg > turnThresholdDeg);
+    avgTurnDeg = mean(anglesDeg);
+end
+end
