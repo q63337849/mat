@@ -3,52 +3,27 @@ clear
 clc
 warning off;
 
-%% 路径规划模型定义（支持二维/三维）
+%% 二维路径规划模型定义（已移除三维环境）
 global startPos goalPos N boxes mapRange
-envMode = '2D';                                          % '2D' 或 '3D'
-N = 2;                                                     % 待优化点的个数(可以修改)
-startPos = [10, 10, 10];                                   % 起点(可以修改)
-goalPos = [175, 175, 50];                                  % 终点(可以修改)
-SearchAgents_no = 30;                                      % 种群大小(可以修改)
-Function_name = 'F1';                                      % F1:随机地图 F2:固定地图
-Max_iteration = 200;                                       % 最大迭代次数(可以修改)
-numRuns = 30;                                              % 独立运行次数
+N = 2;                                                   % 待优化中间点个数
+startPos = [10, 10];                                     % 二维起点 [x,y]
+goalPos  = [175, 175];                                   % 二维终点 [x,y]
+SearchAgents_no = 30;                                    % 种群大小
+Function_name = 'F1';                                    % F1随机障碍 F2固定障碍
+Max_iteration = 200;                                     % 最大迭代次数
+numRuns = 30;                                            % 独立运行次数
 
-% 根据模式设置起终点高度（2D模式下固定高度飞行）
-if strcmpi(envMode, '2D')
-    zFixed = 20;                                            % 2D模式固定高度，需高于Cost_SPSO_rect中的hmin
-    startPos(3) = zFixed;
-    goalPos(3) = zFixed;
-    fprintf('当前模式: 2D（固定高度 z=%.2f）\n', zFixed);
-else
-    fprintf('当前模式: 3D\n');
-end
-
-% 获取函数细节
+% 获取函数细节（二维）
 [lb, ub, dim, fobj] = Get_Functions_details(Function_name);
 
-% 障碍物检查（便于排查“看起来没有障碍物”的问题）
 if isempty(boxes)
     warning('Get_Functions_details 返回的 boxes 为空：当前场景无障碍物。');
 else
     fprintf('当前场景障碍物数量: %d\n', size(boxes,1));
 end
 
-% 强制确保边界适合航迹规划（非负坐标）
-fprintf('原始问题边界: lb=[%s], ub=[%s]\n', num2str(lb), num2str(ub));
-lb = max(lb, 0);
-if any(ub <= lb)
-    ub = max(ub, max(goalPos) + 50);
-end
-fprintf('修正后边界: lb=[%s], ub=[%s]\n', num2str(lb), num2str(ub));
+fprintf('二维问题边界: lb=[%s], ub=[%s]\n', num2str(lb), num2str(ub));
 
-% 2D模式：将所有中间航点的z维搜索空间固定为zFixed，等效为平面路径规划
-if strcmpi(envMode, '2D')
-    lb(2*N+1:3*N) = startPos(3);
-    ub(2*N+1:3*N) = startPos(3);
-end
-
-% 算法列表
 AlgorithmName = {'MIDBO', 'DBO', 'WOA', 'GWO'};
 addpath('./AlgorithmCode/');
 
@@ -72,11 +47,6 @@ for i = 1:numel(AlgorithmName)
             [Best_score, Best_pos, Convergence_curve] = Algorithm(SearchAgents_no, Max_iteration, lb, ub, dim, fobj);
             tCost = toc(tStart);
 
-            % 修正非法值
-            if any(Best_pos < 0)
-                Best_pos = max(Best_pos, 0);
-            end
-
             J_runs(runIdx) = Best_score;
             t_runs(runIdx) = tCost;
 
@@ -97,9 +67,7 @@ for i = 1:numel(AlgorithmName)
     validT = t_runs(isfinite(t_runs));
 
     if isempty(validJ)
-        J_best = inf;
-        J_mean = inf;
-        J_std = inf;
+        J_best = inf; J_mean = inf; J_std = inf;
     else
         J_best = min(validJ);
         J_mean = mean(validJ);
@@ -109,7 +77,7 @@ for i = 1:numel(AlgorithmName)
     if isempty(validT)
         t_global = inf;
     else
-        t_global = validT(1); % 单次规划耗时（取首次成功运行）
+        t_global = validT(1);
     end
 
     pathMetrics = evaluate_path_metrics(bestPos, N, startPos, goalPos, boxes);
@@ -150,15 +118,13 @@ for i = 1:numel(metricsSummary)
              metricsSummary(i).t_global);
 end
 
-% 保存数据
 save('data.mat', 'data', 'metricsSummary');
 
-%% 绘制结果图
 if ~exist('./Picture', 'dir')
     mkdir('./Picture');
 end
 
-% 直方图（最佳J）
+% 直方图
 figure
 validMask = isfinite(bestFit);
 validFit = bestFit(validMask);
@@ -168,10 +134,8 @@ if ~isempty(validFit)
     ylabel('适应度(最优J)');
     set(gca, 'xtick', 1:length(validNames));
     set(gca, 'XTickLabel', validNames);
-    title('各算法最优J对比');
+    title('各算法最优J对比（二维）');
     grid on;
-else
-    text(0.5, 0.5, '所有算法均失败', 'HorizontalAlignment', 'center');
 end
 set(gcf, 'color', 'w');
 saveas(gcf, './Picture/直方图.jpg');
@@ -190,46 +154,20 @@ for i = 1:numel(data)
     end
 end
 if plotCount > 0
-    xlabel('迭代次数');
-    ylabel('代价值 J');
+    xlabel('迭代次数'); ylabel('代价值 J');
     legend(legendEntries, 'Location', 'Best');
-    title('算法收敛曲线对比');
-    grid on;
-else
-    text(0.5, 0.5, '没有有效的收敛数据', 'HorizontalAlignment', 'center');
+    title('算法收敛曲线对比（二维）'); grid on;
 end
 set(gcf, 'color', 'w');
 saveas(gcf, './Picture/收敛曲线.jpg');
 
-%% 显示三维图
+% 二维路径图
 try
-    set(0, 'DefaultFigureVisible', 'on');
     path_pts = plotFigure_rect(data, AlgorithmName, strColor);
-    hFig3 = gcf;
-    ax3 = gca;
-    view(ax3, 3);
-    axis(ax3, 'equal');
-    drawnow;
-    shg;
-    saveas(hFig3, './Picture/路径曲线（三维）.jpg');
-
-    % 二维图
-    hFig2 = figure('Visible', 'off', 'Name', '二维快照', 'NumberTitle', 'off');
-    ax2 = copyobj(ax3, hFig2);
-    set(ax2, 'Units', 'normalized', 'Position', [0.13 0.11 0.775 0.815]);
-    view(ax2, 2);
-    axis(ax2, 'equal');
-    drawnow;
-    saveas(hFig2, './Picture/路径曲线（二维）.jpg');
-    close(hFig2);
-
-    figure(hFig3);
-    drawnow;
-    shg;
-
+    saveas(gcf, './Picture/路径曲线（二维）.jpg');
     save('path_data.mat', 'path_pts');
 catch ME
     fprintf('绘制路径图时出错: %s\n', ME.message);
 end
 
-fprintf('\n程序执行完成！\n');
+fprintf('\n程序执行完成！（纯二维环境）\n');
