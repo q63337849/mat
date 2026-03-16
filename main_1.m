@@ -6,8 +6,8 @@ warning off;
 %% 二维路径规划模型定义（已移除三维环境）
 global startPos goalPos N boxes mapRange
 N = 2;                                                   % 待优化中间点个数
-startPos = [10, 10];                                     % 二维起点 [x,y]
-goalPos  = [175, 175];                                   % 二维终点 [x,y]
+startPos = [1, 1];                                       % 二维起点 [x,y]
+goalPos  = [18, 18];                                     % 二维终点 [x,y]
 SearchAgents_no = 30;                                    % 种群大小
 Function_name = 'F1';                                    % F1随机障碍 F2固定障碍
 Max_iteration = 200;                                     % 最大迭代次数

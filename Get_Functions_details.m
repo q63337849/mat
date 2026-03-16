@@ -1,14 +1,14 @@
 function [lb,ub,dim,fobj] = Get_Functions_details(F)
 global N mapRange boxes startPos goalPos
 
-mapRange = [200,200];   % 二维地图范围 [Lx, Ly]
+mapRange = [20,20];   % 二维地图范围 [Lx, Ly]
 
 switch F
     case 'F1'  % 随机产生二维障碍（仍沿用长方体结构，实际只用XY投影）
-        K = 20;                % 障碍数量（可调）
-        minSize = [8, 8, 1];   % XY最小尺寸
-        maxSize = [18,18,1];   % XY最大尺寸
-        minGap  = 6;           % 障碍-障碍/障碍-边界 间隙
+        K = 15;                % 障碍数量（可调）
+        minSize = [1.2, 1.2, 1];   % XY最小尺寸（适配20x20地图）
+        maxSize = [3.0,3.0,1];   % XY最大尺寸（适配20x20地图）
+        minGap  = 0.6;           % 障碍-障碍/障碍-边界 间隙（适配20x20地图）
         boxes = gen_rect_obstacles(K, [mapRange, 1], minSize, maxSize, minGap, startPos, goalPos);
 
     case 'F2'  % 固定参数（二维投影）
