@@ -1,5 +1,5 @@
 function [lb,ub,dim,fobj] = Get_Functions_details(F)
-global N mapRange boxes
+global N mapRange boxes startPos goalPos
 
 mapRange = [200,200,200];   % 地图长、宽、高
 
@@ -9,7 +9,7 @@ switch F
         minSize = [8, 8, 40];  % 每个维度的最小尺寸
         maxSize = [18,18,120]; % 每个维度的最大尺寸
         minGap  = 6;           % 障碍-障碍/障碍-边界 间隙
-        boxes = gen_rect_obstacles(K, mapRange, minSize, maxSize, minGap);
+        boxes = gen_rect_obstacles(K, mapRange, minSize, maxSize, minGap, startPos, goalPos);
 
     case 'F2'  % 固定参数（13个障碍）
         boxes = [...
