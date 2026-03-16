@@ -83,6 +83,8 @@ for i = 1:numel(AlgorithmName)
 
     result(i).t_global_mean = mean(t_values);
     result(i).t_global_std = std(t_values);
+    result(i).J_cv = safe_ratio(result(i).J_std, result(i).J_mean);
+    result(i).t_global_cv = safe_ratio(result(i).t_global_std, result(i).t_global_mean);
 
     result(i).bestPos = bestPos;
     result(i).bestPath = pathXY;
@@ -104,13 +106,30 @@ for i = 1:numel(result)
     fprintf('  综合代价终值 J(best)    = %.6f\n', result(i).J_best);
     fprintf('  综合代价终值 J(mean)    = %.6f\n', result(i).J_mean);
     fprintf('  综合代价终值 J(std)     = %.6f\n', result(i).J_std);
+    fprintf('  综合代价变异系数 CV(J)  = %.6f\n', result(i).J_cv);
     fprintf('  有效运行次数            = %d/%d\n', result(i).valid_runs, RunTimes);
     fprintf('  失效运行次数            = %d\n', result(i).invalid_runs);
     fprintf('  规划成功率              = %.2f%%\n', result(i).success_rate);
     fprintf('  规划耗时 t_global(mean) = %.6f s\n', result(i).t_global_mean);
     fprintf('  规划耗时 t_global(std)  = %.6f s\n', result(i).t_global_std);
+    fprintf('  耗时变异系数 CV(t)      = %.6f\n', result(i).t_global_cv);
 end
 fprintf('\n============================================================\n');
+
+% 排名分析（越小越好）
+J_mean_all = [result.J_mean];
+t_mean_all = [result.t_global_mean];
+[~, idxJ] = sort(J_mean_all, 'ascend');
+[~, idxt] = sort(t_mean_all, 'ascend');
+fprintf('\nJ(mean) 排名（越小越好）: ');
+for r = 1:numel(idxJ)
+    fprintf('%d)%s ', r, result(idxJ(r)).Algorithm);
+end
+fprintf('\n耗时 t_global(mean) 排名（越小越好）: ');
+for r = 1:numel(idxt)
+    fprintf('%d)%s ', r, result(idxt(r)).Algorithm);
+end
+fprintf('\n');
 
 save('main2_metrics.mat', 'result');
 
@@ -170,5 +189,13 @@ else
     else
         avgTurnDeg = mean(turnAngles);
     end
+end
+end
+
+function out = safe_ratio(num, den)
+if ~isfinite(num) || ~isfinite(den) || abs(den) < eps
+    out = NaN;
+else
+    out = num / den;
 end
 end
